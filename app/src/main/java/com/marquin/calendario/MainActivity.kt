@@ -22,8 +22,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import java.text.SimpleDateFormat
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -43,6 +42,12 @@ data class CalendarEvent(
     val startTime: Long,
     val formattedDate: String,
     val calendarId: Long
+)
+data class CalendarSource(
+    val id: Long,
+    val name: String,
+    val account: String,
+    var enabled: Boolean = true
 )
 
 /* -------------------- DATA HELPERS -------------------- */
@@ -102,15 +107,41 @@ class MainActivity : ComponentActivity() {
 
         setContent {
 
-            var events by remember { mutableStateOf(listOf<CalendarEvent>()) }
+            var events by remember {
+                mutableStateOf(listOf<CalendarEvent>())
+            }
+
+            var calendarSources by remember {
+                mutableStateOf(listOf<CalendarSource>())
+            }
 
             LaunchedEffect(Unit) {
-                events = getCalendarEvents()
+
+                calendarSources = getCalendarSources()
+
+                events = getCalendarEvents(
+                    calendarSources
+                        .filter { it.enabled }
+                        .map { it.id }
+                )
             }
 
             MaterialTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    MonthView(events)
+                    MonthView(
+                        events = events,
+                        calendarSources = calendarSources,
+                        onSourcesChanged = { updated ->
+
+                            calendarSources = updated
+
+                            events = getCalendarEvents(
+                                updated
+                                    .filter { it.enabled }
+                                    .map { it.id }
+                            )
+                        }
+                    )
                 }
             }
         }
@@ -133,7 +164,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun getCalendarEvents(): List<CalendarEvent> {
+
+
+    private fun getCalendarEvents(
+        enabledCalendars: List<Long>
+    ): List<CalendarEvent> {
 
         val events = mutableListOf<CalendarEvent>()
 
@@ -153,9 +188,14 @@ class MainActivity : ComponentActivity() {
 
         cursor?.use {
 
-            val titleIndex = it.getColumnIndex(CalendarContract.Events.TITLE)
-            val startIndex = it.getColumnIndex(CalendarContract.Events.DTSTART)
-            val calendarIdIndex = it.getColumnIndex(CalendarContract.Events.CALENDAR_ID)
+            val titleIndex =
+                it.getColumnIndex(CalendarContract.Events.TITLE)
+
+            val startIndex =
+                it.getColumnIndex(CalendarContract.Events.DTSTART)
+
+            val calendarIdIndex =
+                it.getColumnIndex(CalendarContract.Events.CALENDAR_ID)
 
             val format = SimpleDateFormat(
                 "dd/MM/yyyy HH:mm",
@@ -164,11 +204,18 @@ class MainActivity : ComponentActivity() {
 
             while (it.moveToNext()) {
 
-                val title = it.getString(titleIndex)
-                val startMillis = it.getLong(startIndex)
                 val calendarId = it.getLong(calendarIdIndex)
 
-                val formattedDate = format.format(Date(startMillis))
+                // FILTRA CALENDÁRIOS
+                if (!enabledCalendars.contains(calendarId)) {
+                    continue
+                }
+
+                val title = it.getString(titleIndex)
+                val startMillis = it.getLong(startIndex)
+
+                val formattedDate =
+                    format.format(Date(startMillis))
 
                 events.add(
                     CalendarEvent(
@@ -183,13 +230,60 @@ class MainActivity : ComponentActivity() {
 
         return events
     }
+
+    private fun getCalendarSources(): List<CalendarSource> {
+
+        val sources = mutableListOf<CalendarSource>()
+
+        val cursor = contentResolver.query(
+            CalendarContract.Calendars.CONTENT_URI,
+            arrayOf(
+                CalendarContract.Calendars._ID,
+                CalendarContract.Calendars.ACCOUNT_NAME,
+                CalendarContract.Calendars.CALENDAR_DISPLAY_NAME
+            ),
+            null,
+            null,
+            null
+        )
+
+        cursor?.use {
+
+            val idIndex =
+                it.getColumnIndex(CalendarContract.Calendars._ID)
+
+            val accountIndex =
+                it.getColumnIndex(CalendarContract.Calendars.ACCOUNT_NAME)
+
+            val nameIndex =
+                it.getColumnIndex(CalendarContract.Calendars.CALENDAR_DISPLAY_NAME)
+
+            while (it.moveToNext()) {
+
+                sources.add(
+                    CalendarSource(
+                        id = it.getLong(idIndex),
+                        account = it.getString(accountIndex) ?: "",
+                        name = it.getString(nameIndex) ?: ""
+                    )
+                )
+            }
+        }
+
+        return sources
+    }
+
 }
 
 
 /* -------------------- UI -------------------- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MonthView(events: List<CalendarEvent>) {
+fun MonthView(
+    events: List<CalendarEvent>,
+    calendarSources: List<CalendarSource>,
+    onSourcesChanged: (List<CalendarSource>) -> Unit
+) {
 
     var currentMonth by remember {
         mutableStateOf(YearMonth.now())
@@ -239,7 +333,52 @@ fun MonthView(events: List<CalendarEvent>) {
 
         Spacer(modifier = Modifier.height(12.dp))
 
+
+        LazyColumn(
+            modifier = Modifier.height(140.dp)
+        ) {
+
+            items(calendarSources) { source ->
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+
+                    Checkbox(
+                        checked = source.enabled,
+                        onCheckedChange = { checked ->
+
+                            val updated =
+                                calendarSources.map {
+
+                                    if (it.id == source.id) {
+                                        it.copy(enabled = checked)
+                                    } else {
+                                        it
+                                    }
+                                }
+
+                            onSourcesChanged(updated)
+                        }
+                    )
+
+                    Column {
+
+                        Text(source.name)
+
+                        Text(
+                            text = source.account,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+            }
+        }
+
+
         /* ---------------- HEADER ---------------- */
+
+
 
         Row(modifier = Modifier.fillMaxWidth()) {
 
