@@ -32,7 +32,8 @@
 
         <receiver android:name=".AlarmReceiver" android:exported="false" />
 
-        <activity android:name=".AlarmActivity" android:exported="false" android:theme="@style/Theme.Calendario" />
+        <activity android:name=".AlarmActivity" android:exported="false" android:theme="@style/Theme.Calendario"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
     </application>
 
 </manifest>
