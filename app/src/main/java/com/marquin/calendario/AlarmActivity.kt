@@ -1,5 +1,4 @@
 package com.marquin.calendario
-
 import android.app.AlarmManager
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -26,7 +25,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
 class AlarmActivity : ComponentActivity() {
 
     // Substituímos o Ringtone pelo MediaPlayer para ter controle total de volume e duração
@@ -68,14 +66,13 @@ class AlarmActivity : ComponentActivity() {
                 alarmUri = Uri.parse(customUriString)
             } catch (e: Exception) {}
         }
-
         // ------ CONFIGURAÇÃO DO MEDIAPLAYER ------
         try {
             mediaPlayer = MediaPlayer().apply {
                 setDataSource(applicationContext, alarmUri)
                 setAudioAttributes(
                     AudioAttributes.Builder()
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                         .setUsage(AudioAttributes.USAGE_ALARM)
                         .build()
                 )
