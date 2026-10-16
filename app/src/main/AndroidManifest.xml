@@ -13,9 +13,9 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/ic_launcher_app"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:roundIcon="@drawable/ic_launcher_app"
         android:supportsRtl="true"
         android:theme="@style/Theme.Calendario">
         <activity
@@ -34,6 +34,12 @@
 
         <activity android:name=".AlarmActivity" android:exported="false" android:theme="@style/Theme.Calendario"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden" />
+
+        <activity android:name=".EventsSummaryActivity" android:exported="false" android:theme="@style/Theme.Calendario" />
+
+        <activity android:name=".RecurringAlarmsActivity" android:exported="false" android:theme="@style/Theme.Calendario" />
+
+        <activity android:name=".SettingsActivity" android:exported="false" android:theme="@style/Theme.Calendario" />
     </application>
 
 </manifest>

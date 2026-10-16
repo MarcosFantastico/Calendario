@@ -1,0 +1,53 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="128dp"
+    android:height="128dp"
+    android:viewportWidth="128"
+    android:viewportHeight="128">
+
+    <!-- Background shadow/pages -->
+    <path
+        android:fillColor="#1E88E5"
+        android:pathData="M18,36 L86,36 C90.4,36 94,39.6 94,44 L94,98 C94,102.4 90.4,106 86,106 L18,106 C13.6,106 10,102.4 10,98 L10,44 C10,39.6 13.6,36 18,36 Z" />
+
+    <!-- Front Calendar Body (White) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M26,30 L94,30 C98.4,30 102,33.6 102,38 L102,92 C102,96.4 98.4,100 94,100 L26,100 C21.6,100 18,96.4 18,92 L18,38 C18,33.6 21.6,30 26,30 Z" />
+
+    <!-- Calendar Top Header (Pink / Magenta) -->
+    <path
+        android:fillColor="#FF2A75"
+        android:pathData="M26,30 L94,30 C98.4,30 102,33.6 102,38 L102,48 L18,48 L18,38 C18,33.6 21.6,30 26,30 Z" />
+
+    <!-- Calendar Rings / Hooks -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M32,22 C34.2,22 36,23.8 36,26 L36,34 C36,36.2 34.2,38 32,38 C29.8,38 28,36.2 28,34 L28,26 C28,23.8 29.8,22 32,22 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M52,22 C54.2,22 56,23.8 56,26 L56,34 C56,36.2 54.2,38 52,38 C49.8,38 48,36.2 48,34 L48,26 C48,23.8 49.8,22 52,22 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M72,22 C74.2,22 76,23.8 76,26 L76,34 C76,36.2 74.2,38 72,38 C69.8,38 68,36.2 68,34 L68,26 C68,23.8 69.8,22 72,22 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M88,22 C90.2,22 92,23.8 92,26 L92,34 C92,36.2 90.2,38 88,38 C85.8,38 84,36.2 84,34 L84,26 C84,23.8 85.8,22 88,22 Z" />
+
+    <!-- Grid Dots / Lines on Calendar -->
+    <path
+        android:fillColor="#1C1B1F"
+        android:pathData="M28,56 h10 v8 h-10 Z M46,56 h10 v8 h-10 Z M64,56 h10 v8 h-10 Z M28,70 h10 v8 h-10 Z M46,70 h10 v8 h-10 Z M64,70 h10 v8 h-10 Z M28,84 h10 v8 h-10 Z M46,84 h10 v8 h-10 Z M64,84 h10 v8 h-10 Z" />
+
+    <!-- Lightning Speed Lines -->
+    <path
+        android:fillColor="#FFC107"
+        android:pathData="M110,48 h16 v4 h-16 Z M114,76 h12 v4 h-12 Z" />
+
+    <!-- Flash Lightning Bolt (Golden Yellow) -->
+    <path
+        android:fillColor="#FFD600"
+        android:strokeColor="#FF6F00"
+        android:strokeWidth="2"
+        android:pathData="M92,26 L64,68 L84,68 L68,114 L116,56 L94,56 Z" />
+
+</vector>

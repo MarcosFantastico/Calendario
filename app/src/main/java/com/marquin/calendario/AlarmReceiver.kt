@@ -1,5 +1,6 @@
 package com.marquin.calendario
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -7,44 +8,87 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
-import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import androidx.core.app.NotificationCompat
 
 class AlarmReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val eventTitle = intent.getStringExtra("EVENT_TITLE") ?: "Evento"
+        val eventTitle = intent.getStringExtra("EVENT_TITLE") ?: "Alerta"
+        val eventId = intent.getLongExtra("EVENT_ID", -1L)
+        val isRecurring = intent.getBooleanExtra("IS_RECURRING", false)
+        val recurringAlarmId = intent.getStringExtra("RECURRING_ALARM_ID")
+
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        // Puxamos o som escolhido pelo usuário para tocar na notificação também!
         val sharedPrefs = context.getSharedPreferences("calendario_prefs", Context.MODE_PRIVATE)
-        val customUriString = sharedPrefs.getString("custom_alarm_uri", null)
-        val soundUri = if (customUriString != null) Uri.parse(customUriString) else RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+        val defaultUriString = "android.resource://${context.packageName}/${R.raw.google_pixel_ringtone}"
 
-        // Usamos o hash do som para o Android atualizar o canal se você trocar de música
-        val channelId = "ALARM_CHANNEL_${soundUri.hashCode()}"
+        var customUriString: String? = null
+        var isFullScreen = true
+        var repeatCount = 1
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                channelId,
-                "Alarmes do Calendário",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                // Colocamos o som na notificação para garantir que toque se a tela estiver desbloqueada
-                val audioAttributes = AudioAttributes.Builder()
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .setUsage(AudioAttributes.USAGE_ALARM)
-                    .build()
-                setSound(soundUri, audioAttributes)
-                enableVibration(true)
+        if (isRecurring && recurringAlarmId != null) {
+            val recurringAlarms = loadRecurringAlarms(context)
+            val alarm = recurringAlarms.find { it.id == recurringAlarmId }
+            if (alarm != null) {
+                customUriString = alarm.soundUri ?: sharedPrefs.getString("custom_alarm_uri", defaultUriString)
+                isFullScreen = alarm.isFullScreen
+                repeatCount = alarm.repeatCount
+
+                // Reagenda automaticamente a próxima ocorrência para o ciclo periódico!
+                if (alarm.isEnabled) {
+                    scheduleNextTriggerForRecurringAlarm(context, alarm)
+                }
             }
-            notificationManager.createNotificationChannel(channel)
+        } else if (eventId != -1L) {
+            customUriString = sharedPrefs.getString("event_ringtone_$eventId", null) ?: sharedPrefs.getString("custom_alarm_uri", defaultUriString)
+            isFullScreen = sharedPrefs.getBoolean("event_fullscreen_$eventId", true)
+            repeatCount = sharedPrefs.getInt("event_repeats_$eventId", 1)
+        } else {
+            customUriString = sharedPrefs.getString("custom_alarm_uri", defaultUriString)
         }
 
-        // Prepara a tela vermelha
+        val soundUri = try {
+            Uri.parse(customUriString ?: defaultUriString)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Uri.parse(defaultUriString)
+        }
+
+        // Se for alarme em tela cheia, a própria AlarmActivity tocará o áudio no tempo/repetições corretas.
+        // Silenciamos o canal da notificação em plano de fundo para evitar áudios duplicados.
+        val channelId = if (isFullScreen) "ALARM_CHANNEL_SILENT_V1" else "ALARM_CHANNEL_SOUND_${soundUri.hashCode()}"
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val existingChannel = notificationManager.getNotificationChannel(channelId)
+            if (existingChannel == null) {
+                val channel = NotificationChannel(
+                    channelId,
+                    if (isFullScreen) "Alarmes de Tela Cheia" else "Alertas de Notificação",
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    if (!isFullScreen) {
+                        val audioAttributes = AudioAttributes.Builder()
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .setUsage(AudioAttributes.USAGE_ALARM)
+                            .build()
+                        setSound(soundUri, audioAttributes)
+                    } else {
+                        setSound(null, null)
+                    }
+                    enableVibration(true)
+                    enableLights(true)
+                    lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                }
+                notificationManager.createNotificationChannel(channel)
+            }
+        }
+
         val fullScreenIntent = Intent(context, AlarmActivity::class.java).apply {
             putExtra("EVENT_TITLE", eventTitle)
+            putExtra("EVENT_ID", eventId)
+            putExtra("SOUND_URI", customUriString)
+            putExtra("EVENT_REPEATS", repeatCount)
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
 
@@ -55,24 +99,27 @@ class AlarmReceiver : BroadcastReceiver() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        // Monta a notificação blindada
-        val notification = NotificationCompat.Builder(context, channelId)
+        val notificationBuilder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("Alarme: $eventTitle")
-            .setContentText("Toque para abrir ou desligar.")
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentTitle("Lembrete: $eventTitle")
+            .setContentText("Alerta agendado no FlashCalendar")
+            .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setAutoCancel(true)
-            .setFullScreenIntent(fullScreenPendingIntent, true)
-            .build()
 
-        notificationManager.notify(eventTitle.hashCode(), notification)
+        if (isFullScreen) {
+            notificationBuilder.setFullScreenIntent(fullScreenPendingIntent, true)
+        }
 
-        // Tenta forçar a tela a abrir de forma bruta caso o celular esteja permitindo
-        try {
-            context.startActivity(fullScreenIntent)
-        } catch (e: Exception) {
-            // Se o Android bloquear (porque você tá usando o celular), a notificação acima vai tocar alto!
+        notificationManager.notify((eventTitle + System.currentTimeMillis()).hashCode(), notificationBuilder.build())
+
+        if (isFullScreen) {
+            try {
+                context.startActivity(fullScreenIntent)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 }

@@ -1,4 +1,5 @@
 package com.marquin.calendario
+
 import android.app.AlarmManager
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -6,35 +7,40 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
 import android.media.MediaPlayer
-import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.lifecycleScope
+import com.marquin.calendario.ui.theme.CalendarioTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
 class AlarmActivity : ComponentActivity() {
 
-    // Substituímos o Ringtone pelo MediaPlayer para ter controle total de volume e duração
     private var mediaPlayer: MediaPlayer? = null
     private var eventTitle: String = "Evento"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Força a tela a acender e quebrar o bloqueio
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -48,66 +54,99 @@ class AlarmActivity : ComponentActivity() {
         }
 
         eventTitle = intent.getStringExtra("EVENT_TITLE") ?: "Evento"
+        val eventId = intent.getLongExtra("EVENT_ID", -1L)
 
-        // Desliga a notificação para que apenas a tela principal toque a música
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.cancel(eventTitle.hashCode())
 
-        // ------ LEITURA DAS CONFIGURAÇÕES ------
         val sharedPrefs = getSharedPreferences("calendario_prefs", Context.MODE_PRIVATE)
-        val customUriString = sharedPrefs.getString("custom_alarm_uri", null)
-        val alarmVolume = sharedPrefs.getFloat("alarm_volume", 1.0f) // Vai de 0.0 a 1.0
-        val alarmDuration = sharedPrefs.getInt("alarm_duration", 5) // Em minutos
+        val defaultUriString = "android.resource://$packageName/${R.raw.google_pixel_ringtone}"
 
-        var alarmUri: Uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+        val customUriString = intent.getStringExtra("SOUND_URI")
+            ?: if (eventId != -1L) sharedPrefs.getString("event_ringtone_$eventId", null) else null
+            ?: sharedPrefs.getString("custom_alarm_uri", defaultUriString)
 
-        if (customUriString != null) {
-            try {
-                alarmUri = Uri.parse(customUriString)
-            } catch (e: Exception) {}
+        val repeatCount = if (intent.hasExtra("EVENT_REPEATS")) {
+            intent.getIntExtra("EVENT_REPEATS", 1)
+        } else if (eventId != -1L) {
+            sharedPrefs.getInt("event_repeats_$eventId", 1)
+        } else {
+            1
         }
-        // ------ CONFIGURAÇÃO DO MEDIAPLAYER ------
-        try {
-            mediaPlayer = MediaPlayer().apply {
-                setDataSource(applicationContext, alarmUri)
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .setUsage(AudioAttributes.USAGE_ALARM)
-                        .build()
-                )
-                // Aplica o volume definido pelo usuário no Slider das configurações!
-                setVolume(alarmVolume, alarmVolume)
-                isLooping = true
-                prepare()
-                start()
-            }
+
+        val alarmVolume = sharedPrefs.getFloat("alarm_volume", 1.0f)
+        val alarmDuration = sharedPrefs.getInt("alarm_duration", 5)
+
+        val alarmUri: Uri = try {
+            Uri.parse(customUriString ?: defaultUriString)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Uri.parse(defaultUriString)
         }
 
-        // ------ LÓGICA DE DURAÇÃO (AUTO-DESLIGAR) ------
-        // Se a duração não for infinita (-1), agendamos o encerramento
+        fun startAudio(uri: Uri) {
+            try {
+                var remainingPlays = repeatCount
+                mediaPlayer = MediaPlayer().apply {
+                    setDataSource(applicationContext, uri)
+                    setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .setUsage(AudioAttributes.USAGE_ALARM)
+                            .build()
+                    )
+                    setVolume(alarmVolume, alarmVolume)
+
+                    if (repeatCount == -1) {
+                        isLooping = true
+                    } else {
+                        isLooping = false
+                        setOnCompletionListener { mp ->
+                            remainingPlays--
+                            if (remainingPlays > 0) {
+                                try {
+                                    mp.start()
+                                } catch (e: Exception) {
+                                    stopAudioPlayback()
+                                }
+                            } else {
+                                stopAudioPlayback()
+                            }
+                        }
+                    }
+
+                    prepare()
+                    start()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                if (uri.toString() != defaultUriString) {
+                    startAudio(Uri.parse(defaultUriString))
+                }
+            }
+        }
+
+        startAudio(alarmUri)
+
         if (alarmDuration != -1) {
             lifecycleScope.launch {
                 val durationInMillis = alarmDuration * 60 * 1000L
-                delay(durationInMillis) // Espera o tempo configurado
-                stopAlarm() // Desliga a música e fecha a tela automaticamente
+                delay(durationInMillis)
+                stopAlarmAndFinish()
             }
         }
 
         setContent {
-            MaterialTheme {
+            CalendarioTheme(darkTheme = true) {
                 AlarmScreen(
                     title = eventTitle,
-                    onStop = { stopAlarm() },
+                    onStop = { stopAlarmAndFinish() },
                     onSnooze = { minutes -> snoozeAlarm(minutes) }
                 )
             }
         }
     }
 
-    private fun stopAlarm() {
+    private fun stopAudioPlayback() {
         try {
             mediaPlayer?.stop()
             mediaPlayer?.release()
@@ -115,11 +154,15 @@ class AlarmActivity : ComponentActivity() {
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    private fun stopAlarmAndFinish() {
+        stopAudioPlayback()
         finish()
     }
 
     private fun snoozeAlarm(minutes: Int) {
-        stopAlarm() // Já cuida de parar o MediaPlayer e liberar a memória
+        stopAudioPlayback()
 
         val alarmManager = getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val alarmIntent = Intent(applicationContext, AlarmReceiver::class.java).apply {
@@ -134,19 +177,15 @@ class AlarmActivity : ComponentActivity() {
         )
 
         val snoozeTime = System.currentTimeMillis() + (minutes * 60 * 1000)
-
-        // A ARMA SECRETA: setAlarmClock ignora o Doze Mode e qualquer bloqueio de bateria!
         val alarmClockInfo = AlarmManager.AlarmClockInfo(snoozeTime, pendingIntent)
         alarmManager.setAlarmClock(alarmClockInfo, pendingIntent)
+
+        finish()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        try {
-            mediaPlayer?.stop()
-            mediaPlayer?.release()
-            mediaPlayer = null
-        } catch (e: Exception) {}
+        stopAudioPlayback()
     }
 }
 
@@ -154,38 +193,75 @@ class AlarmActivity : ComponentActivity() {
 fun AlarmScreen(title: String, onStop: () -> Unit, onSnooze: (Int) -> Unit) {
     var showSnoozeOptions by remember { mutableStateOf(false) }
     var showCustomInput by remember { mutableStateOf(false) }
+    var customHoursText by remember { mutableStateOf("") }
     var customMinutesText by remember { mutableStateOf("") }
 
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.error
+        color = Color(0xFF121212)
     ) {
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text(text = "ALARME!", style = MaterialTheme.typography.displayLarge, color = Color.White)
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(text = title, style = MaterialTheme.typography.headlineMedium, color = Color.White)
+            Surface(
+                shape = RoundedCornerShape(20.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                shadowElevation = 8.dp,
+                modifier = Modifier.size(90.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_flash_calendar),
+                        contentDescription = "FlashCalendar Logo",
+                        modifier = Modifier.size(64.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Flash", style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Black, fontStyle = FontStyle.Italic), color = Color(0xFFFFB300))
+                Text("Calendar", style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.Bold, fontStyle = FontStyle.Italic), color = Color.White)
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge.copy(fontSize = 28.sp, fontWeight = FontWeight.Bold),
+                color = Color.White,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
 
             Spacer(modifier = Modifier.height(48.dp))
 
             Button(
                 onClick = onStop,
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                modifier = Modifier.size(width = 200.dp, height = 60.dp)
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFB300), contentColor = Color(0xFF121212)),
+                modifier = Modifier
+                    .fillMaxWidth(0.8f)
+                    .height(56.dp),
+                shape = RoundedCornerShape(28.dp)
             ) {
-                Text("PARAR", color = Color.Red, style = MaterialTheme.typography.titleLarge)
+                Text("DESLIGAR ALARME", fontWeight = FontWeight.Black, fontSize = 18.sp)
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-            TextButton(
+            OutlinedButton(
                 onClick = { showSnoozeOptions = true },
-                modifier = Modifier.size(width = 200.dp, height = 50.dp)
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFFB300)),
+                modifier = Modifier
+                    .fillMaxWidth(0.8f)
+                    .height(50.dp),
+                shape = RoundedCornerShape(25.dp)
             ) {
-                Text("ADIAR (SNOOZE)", color = Color.White, style = MaterialTheme.typography.titleMedium)
+                Text("ADIAR (SNOOZE)", fontWeight = FontWeight.Bold)
             }
         }
 
@@ -207,34 +283,49 @@ fun AlarmScreen(title: String, onStop: () -> Unit, onSnooze: (Int) -> Unit) {
                         TextButton(
                             onClick = { showCustomInput = true },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Tempo Personalizado...", color = MaterialTheme.colorScheme.primary) }
+                        ) { Text("Tempo Personalizado...", color = Color(0xFFFFB300)) }
 
                         if (showCustomInput) {
                             Spacer(modifier = Modifier.height(8.dp))
-                            OutlinedTextField(
-                                value = customMinutesText,
-                                onValueChange = { customMinutesText = it },
-                                label = { Text("Minutos") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                OutlinedTextField(
+                                    value = customHoursText,
+                                    onValueChange = { customHoursText = it },
+                                    label = { Text("Horas") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedTextField(
+                                    value = customMinutesText,
+                                    onValueChange = { customMinutesText = it },
+                                    label = { Text("Minutos") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
                         }
                     }
                 },
                 confirmButton = {
                     if (showCustomInput) {
-                        Button(onClick = {
-                            val mins = customMinutesText.toIntOrNull()
-                            if (mins != null && mins > 0) {
-                                onSnooze(mins)
+                        Button(
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFB300), contentColor = Color(0xFF121212)),
+                            onClick = {
+                                val hours = customHoursText.toIntOrNull() ?: 0
+                                val mins = customMinutesText.toIntOrNull() ?: 0
+                                val totalMins = (hours * 60) + mins
+                                if (totalMins > 0) {
+                                    onSnooze(totalMins)
+                                }
                             }
-                        }) { Text("Confirmar") }
+                        ) { Text("Confirmar", fontWeight = FontWeight.Bold) }
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = {
                         showSnoozeOptions = false
                         showCustomInput = false
+                        customHoursText = ""
                         customMinutesText = ""
                     }) { Text("Cancelar") }
                 }
