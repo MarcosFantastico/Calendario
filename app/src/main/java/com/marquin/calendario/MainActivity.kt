@@ -8,7 +8,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.MediaPlayer
-import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -639,10 +638,15 @@ class MainActivity : ComponentActivity() {
                     if (!isHolidayCalendar && alarmTriggerMillis > now) {
                         try {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                if (alarmManager.canScheduleExactAlarms()) alarmManager.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, alarmTriggerMillis, pendingIntent)
-                                else alarmManager.set(android.app.AlarmManager.RTC_WAKEUP, alarmTriggerMillis, pendingIntent)
+                                if (alarmManager.canScheduleExactAlarms()) {
+                                    val clockInfo = android.app.AlarmManager.AlarmClockInfo(alarmTriggerMillis, pendingIntent)
+                                    alarmManager.setAlarmClock(clockInfo, pendingIntent)
+                                } else {
+                                    alarmManager.set(android.app.AlarmManager.RTC_WAKEUP, alarmTriggerMillis, pendingIntent)
+                                }
                             } else {
-                                alarmManager.setExactAndAllowWhileIdle(android.app.AlarmManager.RTC_WAKEUP, alarmTriggerMillis, pendingIntent)
+                                val clockInfo = android.app.AlarmManager.AlarmClockInfo(alarmTriggerMillis, pendingIntent)
+                                alarmManager.setAlarmClock(clockInfo, pendingIntent)
                             }
                         } catch (e: SecurityException) {
                             alarmManager.set(android.app.AlarmManager.RTC_WAKEUP, alarmTriggerMillis, pendingIntent)
