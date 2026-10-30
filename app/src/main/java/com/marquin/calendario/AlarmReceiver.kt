@@ -10,6 +10,7 @@ import android.content.Intent
 import android.media.AudioAttributes
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 
 class AlarmReceiver : BroadcastReceiver() {
@@ -55,8 +56,6 @@ class AlarmReceiver : BroadcastReceiver() {
             Uri.parse(defaultUriString)
         }
 
-        // Se for alarme em tela cheia, a própria AlarmActivity tocará o áudio no tempo/repetições corretas.
-        // Silenciamos o canal da notificação em plano de fundo para evitar áudios duplicados.
         val channelId = if (isFullScreen) "ALARM_CHANNEL_SILENT_V1" else "ALARM_CHANNEL_SOUND_${soundUri.hashCode()}"
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -115,10 +114,25 @@ class AlarmReceiver : BroadcastReceiver() {
         notificationManager.notify((eventTitle + System.currentTimeMillis()).hashCode(), notificationBuilder.build())
 
         if (isFullScreen) {
-            try {
-                context.startActivity(fullScreenIntent)
-            } catch (e: Exception) {
-                e.printStackTrace()
+            val hasOverlayPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && Settings.canDrawOverlays(context)
+            if (hasOverlayPermission) {
+                val overlayIntent = Intent(context, OverlayAlarmService::class.java).apply {
+                    putExtra("EVENT_TITLE", eventTitle)
+                    putExtra("SOUND_URI", customUriString)
+                    putExtra("EVENT_REPEATS", repeatCount)
+                }
+                try {
+                    context.startService(overlayIntent)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    context.startActivity(fullScreenIntent)
+                }
+            } else {
+                try {
+                    context.startActivity(fullScreenIntent)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
         }
     }

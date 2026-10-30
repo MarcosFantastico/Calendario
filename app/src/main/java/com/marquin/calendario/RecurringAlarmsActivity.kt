@@ -1,4 +1,5 @@
 package com.marquin.calendario
+
 import android.app.AlarmManager
 import android.app.PendingIntent
 import android.content.Context
@@ -10,17 +11,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -32,37 +23,8 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedIconButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -89,7 +51,8 @@ data class RecurringAlarmItem(
     val soundUri: String?,
     val isEnabled: Boolean = true,
     val isFullScreen: Boolean = true,
-    val repeatCount: Int = 1 // -1 = Loop contínuo do toque, >0 = quantidade de repetições do toque
+    val repeatCount: Int = 1, // -1 = Loop contínuo do toque, >0 = quantidade de repetições do toque
+    val daysOfWeek: Set<Int> = setOf(1, 2, 3, 4, 5, 6, 7) // 1 = Dom, 2 = Seg, 3 = Ter, 4 = Qua, 5 = Qui, 6 = Sex, 7 = Sáb
 )
 
 class RecurringAlarmsActivity : ComponentActivity() {
@@ -200,6 +163,7 @@ fun RecurringAlarmsScreenContent(
                     }
                 )
             },
+            floatingActionButtonPosition = FabPosition.Center,
             floatingActionButton = {
                 FloatingActionButton(
                     onClick = {
@@ -207,7 +171,9 @@ fun RecurringAlarmsScreenContent(
                         showDialog = true
                     },
                     containerColor = Color(0xFFFFB300),
-                    contentColor = Color(0xFF121212)
+                    contentColor = Color(0xFF121212),
+                    shape = CircleShape,
+                    modifier = Modifier.size(56.dp)
                 ) {
                     Icon(Icons.Filled.Add, contentDescription = "Adicionar Alerta", modifier = Modifier.size(28.dp))
                 }
@@ -225,7 +191,7 @@ fun RecurringAlarmsScreenContent(
             )
         }
     } else {
-        // Quando incorporado na aba da MainActivity: Sem Scaffold interno, sem TopAppBar e sem título duplicado!
+        // Quando incorporado na aba da MainActivity: Sem Scaffold interno, sem TopAppBar e com FAB centralizado!
         Box(modifier = Modifier.fillMaxSize()) {
             RecurringAlarmsBody(
                 recurringAlarms = recurringAlarms,
@@ -244,9 +210,11 @@ fun RecurringAlarmsScreenContent(
                 },
                 containerColor = Color(0xFFFFB300),
                 contentColor = Color(0xFF121212),
+                shape = CircleShape,
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp)
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 16.dp)
+                    .size(56.dp)
             ) {
                 Icon(Icons.Filled.Add, contentDescription = "Adicionar Alerta", modifier = Modifier.size(28.dp))
             }
@@ -290,13 +258,14 @@ private fun RecurringAlarmsBody(
             ) {
                 items(recurringAlarms) { item ->
                     val intervalText = when {
-                        item.intervalMinutes < 60 -> "De ${item.intervalMinutes} em ${item.intervalMinutes} minutos"
+                        item.intervalMinutes < 60 -> "De ${item.intervalMinutes} em ${item.intervalMinutes} min"
                         item.intervalMinutes == 60 -> "De 1 em 1 hora"
                         item.intervalMinutes % 60 == 0 -> "De ${item.intervalMinutes / 60} em ${item.intervalMinutes / 60} horas"
-                        else -> "A cada ${item.intervalMinutes} minutos"
+                        else -> "A cada ${item.intervalMinutes} min"
                     }
 
-                    val repeatQtyText = if (item.repeatCount == -1) " • Loop contínuo" else " • Toque ${item.repeatCount}x"
+                    val repeatQtyText = if (item.repeatCount == -1) " • Loop" else " • Toque ${item.repeatCount}x"
+                    val daysSummaryText = formatDaysOfWeek(item.daysOfWeek)
 
                     Card(
                         shape = RoundedCornerShape(16.dp),
@@ -352,6 +321,14 @@ private fun RecurringAlarmsBody(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
 
+                            Spacer(modifier = Modifier.height(2.dp))
+
+                            Text(
+                                text = "📅 Dias: $daysSummaryText",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = Color(0xFFFFB300)
+                            )
+
                             Spacer(modifier = Modifier.height(10.dp))
 
                             Row(
@@ -359,41 +336,32 @@ private fun RecurringAlarmsBody(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
-                                ) {
-                                    Text(
-                                        text = if (item.isFullScreen) "🔔 Tela Cheia (Alarme)" else "💬 Banner de Notificação",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                        color = Color.Gray
-                                    )
-                                }
-
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    TextButton(onClick = {
-                                        val testIntent = Intent(context, AlarmReceiver::class.java).apply {
-                                            putExtra("EVENT_TITLE", item.title)
+                                TextButton(
+                                    onClick = {
+                                        val alarmIntent = Intent(context, AlarmReceiver::class.java).apply {
+                                            putExtra("EVENT_TITLE", "TESTE: " + item.title)
                                             putExtra("RECURRING_ALARM_ID", item.id)
                                             putExtra("IS_RECURRING", true)
                                         }
-                                        context.sendBroadcast(testIntent)
-                                    }) {
-                                        Text("▶ Testar Alerta", color = Color(0xFFFFB300), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold))
+                                        context.sendBroadcast(alarmIntent)
                                     }
+                                ) {
+                                    Text("▶ Testar Alerta", color = Color(0xFFFFB300), fontWeight = FontWeight.Bold)
+                                }
 
+                                Row {
                                     IconButton(onClick = { onEdit(item) }) {
-                                        Icon(Icons.Filled.Edit, "Editar", tint = Color(0xFFFFB300))
+                                        Icon(Icons.Filled.Edit, contentDescription = "Editar", tint = Color(0xFFFFB300))
                                     }
                                     IconButton(onClick = { onDelete(item) }) {
-                                        Icon(Icons.Filled.Delete, "Excluir", tint = MaterialTheme.colorScheme.error)
+                                        Icon(Icons.Filled.Delete, contentDescription = "Excluir", tint = MaterialTheme.colorScheme.error)
                                     }
                                 }
                             }
                         }
                     }
                 }
+                item { Spacer(modifier = Modifier.height(80.dp)) }
             }
         }
     }
@@ -423,6 +391,23 @@ fun EditRecurringAlarmDialog(
 
     var isFullScreen by remember { mutableStateOf(alarmToEdit?.isFullScreen ?: true) }
 
+    // Frequência de Dias da Semana (1 = Dom, 2 = Seg, ..., 7 = Sáb)
+    val allWeekDays = remember { setOf(1, 2, 3, 4, 5, 6, 7) }
+    val mondayToFriday = remember { setOf(2, 3, 4, 5, 6) }
+    val weekends = remember { setOf(1, 7) }
+
+    var selectedDays by remember { mutableStateOf(alarmToEdit?.daysOfWeek ?: allWeekDays) }
+    var frequencyPreset by remember(selectedDays) {
+        mutableStateOf(
+            when (selectedDays) {
+                allWeekDays -> "all"
+                mondayToFriday -> "mon_fri"
+                weekends -> "weekend"
+                else -> "custom"
+            }
+        )
+    }
+
     val builtInSounds = remember { getBuiltInSounds(context) }
     val userSavedSounds = remember { getSavedSounds(context) }
     val allAvailableSounds = remember(userSavedSounds) { builtInSounds + userSavedSounds }
@@ -438,6 +423,16 @@ fun EditRecurringAlarmDialog(
         240 to "4 horas"
     )
 
+    val dayNamesMap = listOf(
+        1 to "Dom",
+        2 to "Seg",
+        3 to "Ter",
+        4 to "Qua",
+        5 to "Qui",
+        6 to "Sex",
+        7 to "Sáb"
+    )
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (alarmToEdit == null) "Novo Alerta Recorrente" else "Editar Alerta Recorrente") },
@@ -450,6 +445,101 @@ fun EditRecurringAlarmDialog(
                         label = { Text("Nome do Alerta (Ex: Beber Água)") },
                         modifier = Modifier.fillMaxWidth()
                     )
+                }
+
+                // ------ FREQUÊNCIA / DIAS DA SEMANA ------
+                item {
+                    Text("Frequência dos Dias:", style = MaterialTheme.typography.labelMedium)
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        FilterChip(
+                            selected = frequencyPreset == "all",
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Color(0xFFFFB300),
+                                selectedLabelColor = Color(0xFF121212)
+                            ),
+                            onClick = {
+                                frequencyPreset = "all"
+                                selectedDays = allWeekDays
+                            },
+                            label = { Text("Todos os Dias", fontSize = 11.sp) }
+                        )
+
+                        FilterChip(
+                            selected = frequencyPreset == "mon_fri",
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Color(0xFFFFB300),
+                                selectedLabelColor = Color(0xFF121212)
+                            ),
+                            onClick = {
+                                frequencyPreset = "mon_fri"
+                                selectedDays = mondayToFriday
+                            },
+                            label = { Text("Seg a Sex", fontSize = 11.sp) }
+                        )
+
+                        FilterChip(
+                            selected = frequencyPreset == "weekend",
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Color(0xFFFFB300),
+                                selectedLabelColor = Color(0xFF121212)
+                            ),
+                            onClick = {
+                                frequencyPreset = "weekend"
+                                selectedDays = weekends
+                            },
+                            label = { Text("Fim de Semana", fontSize = 11.sp) }
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        FilterChip(
+                            selected = frequencyPreset == "custom",
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Color(0xFFFFB300),
+                                selectedLabelColor = Color(0xFF121212)
+                            ),
+                            onClick = { frequencyPreset = "custom" },
+                            label = { Text("Personalizado", fontSize = 11.sp, fontWeight = if (frequencyPreset == "custom") FontWeight.Bold else FontWeight.Normal) }
+                        )
+                    }
+
+                    if (frequencyPreset == "custom") {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            dayNamesMap.forEach { (dayCode, dayLabel) ->
+                                val isDaySelected = selectedDays.contains(dayCode)
+                                FilterChip(
+                                    selected = isDaySelected,
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = Color(0xFFFFB300),
+                                        selectedLabelColor = Color(0xFF121212)
+                                    ),
+                                    onClick = {
+                                        val newSet = selectedDays.toMutableSet()
+                                        if (isDaySelected) {
+                                            if (newSet.size > 1) newSet.remove(dayCode)
+                                        } else {
+                                            newSet.add(dayCode)
+                                        }
+                                        selectedDays = newSet
+                                    },
+                                    label = { Text(dayLabel, fontSize = 10.sp, fontWeight = if (isDaySelected) FontWeight.Bold else FontWeight.Normal) },
+                                    modifier = Modifier.padding(horizontal = 1.dp)
+                                )
+                            }
+                        }
+                    }
                 }
 
                 item {
@@ -696,7 +786,8 @@ fun EditRecurringAlarmDialog(
                         soundUri = selectedSoundUri,
                         isEnabled = alarmToEdit?.isEnabled ?: true,
                         isFullScreen = isFullScreen,
-                        repeatCount = finalRepeatCount
+                        repeatCount = finalRepeatCount,
+                        daysOfWeek = selectedDays
                     )
                     onSave(newItem)
                 }
@@ -708,6 +799,30 @@ fun EditRecurringAlarmDialog(
 
 // ------ STORAGE & SCHEDULING HELPERS ------
 
+fun formatDaysOfWeek(days: Set<Int>): String {
+    val allDays = setOf(1, 2, 3, 4, 5, 6, 7)
+    val weekDays = setOf(2, 3, 4, 5, 6)
+    val weekendDays = setOf(1, 7)
+
+    return when {
+        days.containsAll(allDays) || days.isEmpty() -> "Todos os dias"
+        days == weekDays -> "Segunda a Sexta"
+        days == weekendDays -> "Finais de semana"
+        else -> {
+            val dayNames = mapOf(
+                1 to "Dom",
+                2 to "Seg",
+                3 to "Ter",
+                4 to "Qua",
+                5 to "Qui",
+                6 to "Sex",
+                7 to "Sáb"
+            )
+            days.sorted().mapNotNull { dayNames[it] }.joinToString(", ")
+        }
+    }
+}
+
 fun loadRecurringAlarms(context: Context): List<RecurringAlarmItem> {
     val sharedPrefs = context.getSharedPreferences("calendario_prefs", Context.MODE_PRIVATE)
     val jsonString = sharedPrefs.getString("recurring_alarms_json", null) ?: return emptyList()
@@ -715,24 +830,34 @@ fun loadRecurringAlarms(context: Context): List<RecurringAlarmItem> {
     try {
         val array = JSONArray(jsonString)
         for (i in 0 until array.length()) {
-            val obj = JSONArray(jsonString).let {
-                val itemObj = it.getJSONObject(i)
-                list.add(
-                    RecurringAlarmItem(
-                        id = itemObj.getString("id"),
-                        title = itemObj.getString("title"),
-                        startHour = itemObj.getInt("startHour"),
-                        startMinute = itemObj.getInt("startMinute"),
-                        endHour = itemObj.getInt("endHour"),
-                        endMinute = itemObj.getInt("endMinute"),
-                        intervalMinutes = itemObj.getInt("intervalMinutes"),
-                        soundUri = if (itemObj.has("soundUri") && !itemObj.isNull("soundUri")) itemObj.getString("soundUri") else null,
-                        isEnabled = if (itemObj.has("isEnabled")) itemObj.getBoolean("isEnabled") else true,
-                        isFullScreen = if (itemObj.has("isFullScreen")) itemObj.getBoolean("isFullScreen") else true,
-                        repeatCount = if (itemObj.has("repeatCount")) itemObj.getInt("repeatCount") else (if (itemObj.has("maxRepeats")) itemObj.getInt("maxRepeats") else 1)
-                    )
-                )
+            val itemObj = array.getJSONObject(i)
+
+            val daysSet = mutableSetOf<Int>()
+            if (itemObj.has("daysOfWeek")) {
+                val daysArr = itemObj.getJSONArray("daysOfWeek")
+                for (j in 0 until daysArr.length()) {
+                    daysSet.add(daysArr.getInt(j))
+                }
+            } else {
+                daysSet.addAll(setOf(1, 2, 3, 4, 5, 6, 7))
             }
+
+            list.add(
+                RecurringAlarmItem(
+                    id = itemObj.getString("id"),
+                    title = itemObj.getString("title"),
+                    startHour = itemObj.getInt("startHour"),
+                    startMinute = itemObj.getInt("startMinute"),
+                    endHour = itemObj.getInt("endHour"),
+                    endMinute = itemObj.getInt("endMinute"),
+                    intervalMinutes = itemObj.getInt("intervalMinutes"),
+                    soundUri = if (itemObj.has("soundUri") && !itemObj.isNull("soundUri")) itemObj.getString("soundUri") else null,
+                    isEnabled = if (itemObj.has("isEnabled")) itemObj.getBoolean("isEnabled") else true,
+                    isFullScreen = if (itemObj.has("isFullScreen")) itemObj.getBoolean("isFullScreen") else true,
+                    repeatCount = if (itemObj.has("repeatCount")) itemObj.getInt("repeatCount") else (if (itemObj.has("maxRepeats")) itemObj.getInt("maxRepeats") else 1),
+                    daysOfWeek = daysSet
+                )
+            )
         }
     } catch (e: Exception) {
         e.printStackTrace()
@@ -756,6 +881,10 @@ fun saveRecurringAlarms(context: Context, alarms: List<RecurringAlarmItem>) {
             put("isEnabled", alarm.isEnabled)
             put("isFullScreen", alarm.isFullScreen)
             put("repeatCount", alarm.repeatCount)
+
+            val daysArr = JSONArray()
+            alarm.daysOfWeek.forEach { daysArr.put(it) }
+            put("daysOfWeek", daysArr)
         }
         array.put(obj)
     }
@@ -821,46 +950,58 @@ fun cancelRecurringAlarm(context: Context, alarm: RecurringAlarmItem) {
 }
 
 fun calculateNextTriggerMillis(alarm: RecurringAlarmItem, nowMillis: Long): Long? {
-    val startCal = Calendar.getInstance().apply {
-        timeInMillis = nowMillis
-        set(Calendar.HOUR_OF_DAY, alarm.startHour)
-        set(Calendar.MINUTE, alarm.startMinute)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }
+    val daysOfWeek = if (alarm.daysOfWeek.isNotEmpty()) alarm.daysOfWeek else setOf(1, 2, 3, 4, 5, 6, 7)
+    val testCal = Calendar.getInstance().apply { timeInMillis = nowMillis }
 
-    val endCal = Calendar.getInstance().apply {
-        timeInMillis = nowMillis
-        set(Calendar.HOUR_OF_DAY, alarm.endHour)
-        set(Calendar.MINUTE, alarm.endMinute)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }
+    for (dayOffset in 0..7) {
+        val currentDayOfWeek = testCal.get(Calendar.DAY_OF_WEEK) // 1 = Dom, 2 = Seg, ..., 7 = Sáb
+        if (daysOfWeek.contains(currentDayOfWeek)) {
+            val startCal = (testCal.clone() as Calendar).apply {
+                set(Calendar.HOUR_OF_DAY, alarm.startHour)
+                set(Calendar.MINUTE, alarm.startMinute)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            val endCal = (testCal.clone() as Calendar).apply {
+                set(Calendar.HOUR_OF_DAY, alarm.endHour)
+                set(Calendar.MINUTE, alarm.endMinute)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
 
-    var startMillis = startCal.timeInMillis
-    var endMillis = endCal.timeInMillis
-    if (endMillis <= startMillis) {
-        endMillis += 24 * 60 * 60 * 1000L
-    }
+            var startMillis = startCal.timeInMillis
+            var endMillis = endCal.timeInMillis
+            if (endMillis <= startMillis) {
+                endMillis += 24 * 60 * 60 * 1000L
+            }
 
-    val intervalMins = if (alarm.intervalMinutes > 0) alarm.intervalMinutes else 60
-    val intervalMillis = intervalMins * 60 * 1000L
+            val intervalMins = if (alarm.intervalMinutes > 0) alarm.intervalMinutes else 60
+            val intervalMillis = intervalMins * 60 * 1000L
 
-    // 1. Se a hora atual for anterior ao horário de início de hoje
-    if (nowMillis < startMillis) {
-        return startMillis
-    }
-
-    // 2. Se a hora atual estiver dentro da janela de hoje [startMillis, endMillis]
-    var currentSlot = startMillis
-    while (currentSlot <= endMillis) {
-        if (currentSlot > nowMillis) {
-            return currentSlot
+            if (dayOffset == 0) {
+                // Hoje: testa slots entre startMillis e endMillis
+                if (nowMillis < startMillis) {
+                    return startMillis
+                }
+                var currentSlot = startMillis
+                while (currentSlot <= endMillis) {
+                    if (currentSlot > nowMillis) {
+                        return currentSlot
+                    }
+                    currentSlot += intervalMillis
+                }
+            } else {
+                // Dia futuro permitido: retorna o horário inicial desse dia
+                return startMillis
+            }
         }
-        currentSlot += intervalMillis
+
+        testCal.add(Calendar.DAY_OF_YEAR, 1)
+        testCal.set(Calendar.HOUR_OF_DAY, 0)
+        testCal.set(Calendar.MINUTE, 0)
+        testCal.set(Calendar.SECOND, 0)
+        testCal.set(Calendar.MILLISECOND, 0)
     }
 
-    // 3. Se todos os horários do intervalo de hoje já passaram, o próximo disparo é na hora de início de amanhã
-    startCal.add(Calendar.DAY_OF_YEAR, 1)
-    return startCal.timeInMillis
+    return null
 }

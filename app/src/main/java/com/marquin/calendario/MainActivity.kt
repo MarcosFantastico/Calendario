@@ -2588,5 +2588,54 @@ fun SettingsScreen(
                 }
             }
         }
+
+        // ------ 5. ALERTA FLUTUANTE (SOBREPOSIÇÃO) ------
+        item {
+            Divider()
+            Spacer(modifier = Modifier.height(16.dp))
+            Text("Alerta Flutuante (Sobreposição)", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text("Exibe um card de alerta flutuante sobre outros aplicativos quando o alarme de tela cheia disparar.", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            Spacer(modifier = Modifier.height(12.dp))
+
+            val hasOverlayPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) Settings.canDrawOverlays(context) else true
+
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (hasOverlayPermission) "Status: Concedido ✅" else "Status: Não Permitido ⚠️",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                            color = if (hasOverlayPermission) Color(0xFF4CAF50) else Color(0xFFFFB300)
+                        )
+                        Text(
+                            text = if (hasOverlayPermission) "Os alertas flutuantes surgirão no topo de outros apps." else "Toque para abrir a tela de permissões do celular.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.Gray
+                        )
+                    }
+
+                    if (!hasOverlayPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        Button(
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFB300), contentColor = Color(0xFF121212)),
+                            onClick = {
+                                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))
+                                context.startActivity(intent)
+                            }
+                        ) {
+                            Text("Permitir", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
